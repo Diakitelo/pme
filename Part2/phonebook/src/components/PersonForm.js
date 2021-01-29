@@ -6,6 +6,7 @@ export default function PersonForm({
   handleNameChange,
   newNumber,
   handleNumChange,
+  handleUpdate
 }) {
   return (
     <form onSubmit={addName}>

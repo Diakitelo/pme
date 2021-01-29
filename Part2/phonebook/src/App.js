@@ -1,36 +1,32 @@
 import React, { useState, useEffect } from "react";
-import axios from 'axios'
 
 import Filter from "./components/Filter";
 import PersonForm from "./components/PersonForm";
 import Persons from "./components/Persons";
+import NotificationSuccess from "./components/NotificationSuccess";
+import NotificationError from "./components/NotificationError";
+import phoneBookService from "./components/services/phoneBook";
 
 const App = () => {
   const [persons, setPersons] = useState([]);
   const [newName, setNewName] = useState("");
-  const [filter, setFilter] = useState("");
   const [newNumber, setNewNumber] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    axios
-      .get('http://localhost:3002/persons')
-      .then(response => {
-        console.log('promise fulfilled')
-        setPersons(response.data)
-      })
-  }, [])
+    phoneBookService.getAll().then((initialPhoneBook) => {
+      setPersons(initialPhoneBook);
+    });
+  }, []);
 
-  const isFilter =
-    filter.length === 0
+  const results =
+    searchTerm === ""
       ? persons
-      : persons.filter((value) => value.name.includes(filter));
-
-  const results = !searchTerm
-    ? persons
-    : persons.filter((person) =>
-        person.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      : persons.filter((person) =>
+          person.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
   const addName = (event) => {
     event.preventDefault();
@@ -39,16 +35,62 @@ const App = () => {
       number: newNumber,
     };
 
-    if (
-      isFilter.filter(
-        (value) => value.name.toLowerCase() === newName.toLowerCase()
-      ) == ""
-    ) {
-      setPersons(persons.concat(nameObject));
+    const isExist = persons
+      .map((person) => person.name.toLowerCase())
+      .includes(nameObject.name.toLowerCase());
+
+    if (!isExist) {
+      phoneBookService.create(nameObject)
+      .then((response) => {
+        setPersons(persons.concat(response));
+        setSuccessMessage(`Add ${nameObject.name}`);
+        setTimeout(() => {
+          setSuccessMessage("");
+        }, 5000);
+        setNewName("");
+        setNewNumber("");
+      })
+      .catch((error) => {
+        setErrorMessage(error.response.data.error);
+        setTimeout(() => {
+          setErrorMessage("");
+        }, 5000);
+      });
+    } else {
+      const contact = persons.filter(
+        (person) => person.name.toLowerCase() === nameObject.name.toLowerCase()
+      )[0];
+
+      const confirmUpdate = window.confirm(
+        `${newName} is already added to phonebook, replace the old number with a new one?`
+      );
+      if (confirmUpdate) {
+        phoneBookService
+          .update(contact.id, { ...nameObject, id: contact.id })
+          .then((response) => {
+            setPersons(
+              persons.map((person) =>
+                person.id === contact.id
+                  ? { ...nameObject, id: response.id }
+                  : person
+              )
+            );
+            setSuccessMessage(`Update ${nameObject.name}`);
+            setTimeout(() => {
+              setSuccessMessage("");
+            }, 5000);
+          })
+          .catch((err) => {
+            setErrorMessage(
+              `Information of ${nameObject.name} has already been remove from server`
+            );
+            setTimeout(() => {
+              setErrorMessage("");
+            }, 5000);
+          });
+      }
       setNewName("");
       setNewNumber("");
-    } else {
-      alert(`${newName} is already added to phonebook`);
     }
   };
 
@@ -63,10 +105,30 @@ const App = () => {
   const handleChange = (event) => {
     setSearchTerm(event.target.value);
   };
+  const handleDelete = (id) => {
+    const person = persons.find((p) => p.id === id);
+
+    const confirmDelete = window.confirm(`Delete ${person.name}?`);
+
+    if (confirmDelete) {
+      phoneBookService.deleted(id).then(() => {
+        const filteredPersons = persons.filter((person) => person.id !== id);
+        setPersons(filteredPersons);
+        setSuccessMessage(
+          `Information of ${person.name} has been removed from the server`
+        );
+        setTimeout(() => {
+          setSuccessMessage("");
+        }, 5000);
+      });
+    }
+  };
 
   return (
     <div>
       <h2>Phonebook</h2>
+      <NotificationSuccess message={successMessage} />
+      <NotificationError message={errorMessage} />
       <Filter searchTerm={searchTerm} handleChange={handleChange} />
       <h3>add a new</h3>
       <PersonForm
@@ -77,7 +139,11 @@ const App = () => {
         handleNumChange={handleNumChange}
       />
       <h3>Numbers</h3>
-      <Persons persons={persons} results={results} />
+      <Persons
+        persons={persons}
+        results={results}
+        handleDelete={handleDelete}
+      />
     </div>
   );
 };

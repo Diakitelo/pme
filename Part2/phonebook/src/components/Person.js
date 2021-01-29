@@ -1,9 +1,15 @@
-import React from "react";
-
-export default function Person({ name, number }) {
+export default function Person({results, handleDelete }){
   return (
-    <p>
-      {name} {number}
-    </p>
+    <>
+    {
+      results.map((resultat) => (  
+      <p key={resultat.id}>
+        {resultat.name }
+        {resultat.number}
+        <button onClick={() => handleDelete(resultat.id)} >Delete</button>
+      </p>
+      ))
+    }
+    </>
   );
 }
